@@ -13,6 +13,7 @@
 #include "Core/info.h"
 #include <string>
 #include "Web/update_check.h"
+#include "Game/Timeline/Timeline.h"
 
 
 
@@ -496,6 +497,12 @@ int restoredGameUpdatePauseAddr = 0;
 void __declspec(naked)GameUpdatePause()
 {
 	LOG_ASM(7, "GameUpdatePause\n");
+
+	if (g_timeline.enabled) {
+		__asm pushad
+		g_timeline.update(); // timeline needs to be updated in sync with game loop, not in the middle of state change
+		__asm popad
+	}
 
 	__asm
 	{
