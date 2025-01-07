@@ -15,6 +15,7 @@
 #include "Overlay/Widget/StageSelectWidget.h"
 
 #include <sstream>
+#include "Game/Timeline/Timeline.h"
 
 MainWindow::MainWindow(const std::string& windowTitle, bool windowClosable, WindowContainer& windowContainer, ImGuiWindowFlags windowFlags)
 	: IWindow(windowTitle, windowClosable, windowFlags), m_pWindowContainer(&windowContainer)
@@ -106,6 +107,11 @@ void MainWindow::DrawUtilButtons() const
 	if (ImGui::Button("States", BTN_SIZE))
 	{
 		m_pWindowContainer->GetWindow(WindowType_Scr)->ToggleOpen();
+	}
+	if (ImGui::Button("Timeline", BTN_SIZE))
+	{
+		m_pWindowContainer->GetWindow(WindowType_Timeline)->ToggleOpen();
+		g_timeline.enabled = m_pWindowContainer->GetWindow(WindowType_Timeline)->IsOpen();
 	}
 }
 

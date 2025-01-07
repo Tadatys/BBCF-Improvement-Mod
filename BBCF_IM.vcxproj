@@ -41,6 +41,7 @@
     <ClCompile Include="src\Overlay\Window\PlaybackEditorWindow.cpp" />
     <ClCompile Include="src\Overlay\Window\RoomWindow.cpp" />
     <ClCompile Include="src\Overlay\Window\ScrWindow.cpp" />
+    <ClCompile Include="src\Overlay\Window\TimelineWindow.cpp" />
     <ClCompile Include="src\Palette\CharPaletteHandle.cpp" />
     <ClCompile Include="src\Game\gamestates.cpp" />
     <ClCompile Include="src\Game\Jonb\JonbReader.cpp" />
@@ -137,6 +138,7 @@
     <ClInclude Include="src\Overlay\Window\PlaybackEditorWindow.h" />
     <ClInclude Include="src\Overlay\Window\RoomWindow.h" />
     <ClInclude Include="src\Overlay\Window\ScrWindow.h" />
+    <ClInclude Include="src\Overlay\Window\TimelineWindow.h" />
     <ClInclude Include="src\Palette\CharPaletteHandle.h" />
     <ClInclude Include="src\Game\Jonb\JonbEntry.h" />
     <ClInclude Include="src\Game\Jonb\JonbReader.h" />
