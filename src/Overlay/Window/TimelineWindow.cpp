@@ -20,6 +20,21 @@ void TimelineWindow::Draw()
 	ImGui::SameLine();
 	bool copyPressed = ImGui::Button("Copy to clipboard");
 
+	ImGui::SameLine();
+	if (ImGui::Button("Open theater file")) {
+		FILE* f = fopen("theaterfile", "w");
+		fputs("{\"entity_columns\":[\"id\",\"pos_x\",\"pos_y\",\"facing_left\",\"sprite\"],\n\"frames\":[\n", f); // \"off_x\",\"off_y\",
+		fclose(f);
+	}
+
+	ImGui::SameLine();
+	if (ImGui::Button("Close theater file")) {
+		FILE* f = fopen("theaterfile", "a");
+		fputs("]}", f);
+		fclose(f);
+	}
+
+
 	//if (ImGui::Button("Update"))
 	//if (g_timeline.enabled) g_timeline.update(); // running update here sometimes skips frames
 	//ImGui::SameLine();

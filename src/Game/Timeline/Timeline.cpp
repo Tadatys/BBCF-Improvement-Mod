@@ -251,6 +251,42 @@ void Timeline::update() {
 		rewind(t.frame);
 
 	
+	// output sprites in json
+	if (true) {
+		std::string r = "[";
+
+		char* base = GetBbcfBaseAdress();
+
+		//r += "[\"G\"," // TODO: round metadata, current frame/clock. also character names?
+
+		for (int i = 0; i < g_gameVals.entityCount; i++)
+		{
+			CharData* ent = (CharData*)g_gameVals.pEntityList[i];
+			const bool isEntityActive = ent->unknownStatus1 == 1 && ent->pJonbEntryBegin;
+			if (!isEntityActive) continue;
+
+			// logic starting around BBCF.exe+1A00A1:
+			char* ent_hip_info = (char*)ent + 0x09e0 + *(int*)((char*)ent + 0x1250) * 108; // p+0x1250 is an index into an array starting from p+0x09e0
+			char* ptr = *(char**)(*(char**)(base + 0x623674) + *(int*)(ent_hip_info + 0 * 4 + 0x2C) * 4);
+			char* hip_info = *(char**)(*(char**)(ptr + 4) + *(int*)(ent_hip_info + 0 * 4 + 0x4C) * 4);
+			//int off_x = *(int*)(hip_info + 0x44), off_y = *(int*)(hip_info + 0x48); // sometimes causes pointer errors, I suspect that 0 * 4 should be 1 * 4 in those cases
+			// TODO: transform position_x/y with view/proj matrices, as in HitboxOverlay
+
+			if (r.size() > 1) r += ",";
+			r = r + "[\"" + std::to_string((int)ent) + "\"," +
+				std::to_string(ent->position_x) + "," + std::to_string(ent->position_y) + "," +
+				//std::to_string(off_x) + "," + std::to_string(off_y) + "," +
+				std::to_string(ent->facingLeft) + ",\"" + (char*)&ent->currentSprite + "\"]";
+		}
+
+		r += "],\n";
+
+		FILE* f = fopen("theaterfile", "a");
+		fputs(r.c_str(), f);
+		fclose(f);
+	}
+
+
 	// padded frame number
 	std::string s = std::to_string(t.frame);
 	if (s.size() > 6) s = s.substr(s.size() - 6, 6);
