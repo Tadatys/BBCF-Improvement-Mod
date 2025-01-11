@@ -16,6 +16,7 @@
 #define STB_IMAGE_IMPLEMENTATION
 //#include "stb_image.h"
 
+#include "GymWindow.h"
 //#include <d3d9.h>
 //#include <imgui_impl_dx9.cpp>
 //#include <d3dx9tex.h> // Include D3DX9Tex header for texture loading
@@ -80,6 +81,14 @@ void DebugWindow::Draw()
 	if (m_showDemoWindow)
 	{
 		ImGui::ShowDemoWindow(&m_showDemoWindow);
+	}
+
+	static GymWindow gym("Gym", true, ImGuiWindowFlags_NoCollapse);
+	gym.Update(); // TODO: move to WindowContainer
+
+
+	if (ImGui::Button("Gym")) {
+		gym.ToggleOpen();
 	}
 
 	DrawImGuiSection();
