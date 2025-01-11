@@ -16,6 +16,7 @@
 #define STB_IMAGE_IMPLEMENTATION
 //#include "stb_image.h"
 
+#include "Game/Menus/MainMenu.h"
 //#include <d3d9.h>
 //#include <imgui_impl_dx9.cpp>
 //#include <d3dx9tex.h> // Include D3DX9Tex header for texture loading
@@ -81,6 +82,8 @@ void DebugWindow::Draw()
 	{
 		ImGui::ShowDemoWindow(&m_showDemoWindow);
 	}
+
+	DrawMenuStateMachine();
 
 	DrawImGuiSection();
 
