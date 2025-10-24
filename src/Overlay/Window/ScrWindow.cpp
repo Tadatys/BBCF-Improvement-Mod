@@ -55,6 +55,7 @@ void ScrWindow::Draw()
     
     DrawReplayTakeover();
     DrawRoomSection();
+    DrawLobbiesSection();
     DrawInputBufferButton();
     DrawComboDataButton();
 }
@@ -2472,3 +2473,224 @@ void ScrWindow::DrawRoomSection() {
 
     };
 };
+
+
+
+typedef int(__thiscall* Method1)(void*);
+typedef int(__thiscall* Method2)(void*, int);
+
+bool DrawNetworkSection() {
+    char* base = GetBbcfBaseAdress();
+
+    int state = *(int*)(base + 0x8f7958 + 0x0); // base->static_NetworkStruct.state;
+    if (!(state != 0 && state != 2 && state != 3 && state != 0xe)) { // checks if we're already logged in
+        if (ImGui::Button("Log In")) {
+            auto push_action = (Method2)(base + 0xa88d0); // & base->NetworkStruct___push_action;
+            push_action(base + 0x8f7958, 5);
+        }
+        return false;
+    }
+    else {
+        int* entry_state = (int*)((char*)base + 0x008f7758);
+        if (*entry_state == 0 || *entry_state == 2) { // state 2 means paused
+            if (ImGui::Button("Ranked Entry")) {
+                *entry_state = 1;
+            }
+        }
+        else if (*entry_state == 1) {
+            if (ImGui::Button("Withdraw Entry")) {
+                *entry_state = 3;
+            }
+        }
+
+        /*if (ImGui::Button("Toggle Entry")) {
+            auto push_action = (Method2)&base->NetworkStruct___push_action;
+            push_action(&base->static_NetworkStruct, 0xe); // opens entry popup like in training mode
+        }*/
+        return true;
+    }
+}
+
+
+// RGBA color looks like ABGR, when written as 32bit hex number
+const unsigned int netcolors[9] = { 0xffffffff, 0xffff00ff, 0xff0088ff, 0xff00ffff, 0xff00ff44, 0xff00cc00, 0xffff4400, 0xffffff00, 0xff000000 };
+const char* room_types[] = { "?", "Match", "FFA", "?", "?", "?", "?" };
+
+/*
+void DrawLobby(struct GAMESTEAM_SearchResultNode* lobby) {
+    ImGui::Text("%ls: %d LV%d %d/%d", lobby->room_name, lobby->host_netcolor, lobby->rank_host_level, lobby->num_members, lobby->player_member_max);
+    // TODO: try calling join functions, e.g.
+    // auto ns = &base->static_NetworkStruct;
+    // ns->lobby_index_ = ?
+    // call 000a89d0 _start_join_lobby(ns)
+}
+*/
+
+void DrawLobby(std::map<std::string, std::string>& d) {
+    int netcolor = max(0, min(std::stoi(d["HOST_NETCOLOR"]), 8));
+    ImGui::PushStyleColor(ImGuiCol_Text, netcolors[netcolor]);
+    ImGui::Text("#");
+    ImGui::PopStyleColor();
+    ImGui::SameLine();
+
+    if (d["type"] == "RANKED") {
+        ImGui::Text("%-16s  LV%d", d["ownerName"].c_str(), std::stoi(d["RANK_HOST_LEVEL"]) + 1);
+
+        /*ImGui::SameLine();
+        ImGui::PushID(d["ID"].c_str()); // TODO: invites don't work for ranked
+        if (ImGui::Button("join")) {
+            auto handle_invite = (Method2)&base->AASTEAM_CNetworker___handle_callback;
+            handle_invite(&base->static_AASTEAM_CNetworker, (int)d["ID_bytes"].c_str());
+        }
+        ImGui::PopID();*/
+    }
+    else {
+        int room_type = max(0, min(std::stoi(d["PLAYER_ROOM_TYPE"]), 6));
+        int member_num = max(0, min(std::stoi(d["MEMBER_NUM"]), 8));
+        int private_max = max(0, min(std::stoi(d["PLAYER_PRIVATE_MAX"]), 8));
+        int member_max = max(0, min(std::stoi(d["PLAYER_MEMBER_MAX"]), 8));
+
+        if (member_num + private_max >= member_max) ImGui::PushStyleColor(ImGuiCol_Text, 0x88ffffff);
+
+        // TODO: printf padding is bad with kanji, need to use ImGui functions
+        ImGui::Text("%-16s  %5s", d["PLAYER_ROOM_NAME"].c_str(), room_types[room_type]);
+        if (ImGui::IsItemHovered())
+        {
+            ImGui::BeginTooltip();
+            ImGui::TextUnformatted(d["ownerName"].c_str());
+            ImGui::EndTooltip();
+        };
+        ImGui::SameLine();
+        if (private_max == 0) ImGui::Text(" %d/%d", member_num, member_max);
+        else ImGui::Text(" %d/%d+%d", member_num, member_max - private_max, private_max);
+
+        if (member_num + private_max >= member_max) ImGui::PopStyleColor();
+        else {
+            ImGui::SameLine();
+            ImGui::PushID(d["ID"].c_str());
+            if (ImGui::Button("join")) {
+                // join using invite mechanism. possibly ignores some filters
+                char* base = GetBbcfBaseAdress();
+                auto handle_invite = (Method2)(base + 0x1cac0); //&base->AASTEAM_CNetworker___handle_invite_callback;
+                //            &base->static_AASTEAM_CNetworker
+                handle_invite(base + 0x625788, (int)d["ID_bytes"].data()); // XXX: hack
+            }
+            ImGui::PopID();
+        }
+    }
+}
+
+std::map<std::string, std::string> ReadLobbyToDict(ISteamMatchmaking* matchmaking, int index) {
+    std::map<std::string, std::string> d;
+
+    CSteamID lobby = matchmaking->GetLobbyByIndex(index);
+    if (lobby.ConvertToUint64() == 0)
+        return d; // not a valid lobby, end of the list
+
+    d["ID"] = std::to_string(lobby.ConvertToUint64());
+    d["ID_bytes"] = std::string(9, '\0'); // XXX: hack
+    memcpy(d["ID_bytes"].data(), &lobby, 8);
+
+    int n = matchmaking->GetLobbyDataCount(lobby);
+    char key[256] = "", value[256] = "";
+    for (int i = 0; i < n; i++) {
+        matchmaking->GetLobbyDataByIndex(lobby, i, key, sizeof(key), value, sizeof(value));
+        d[key] = value;
+    }
+
+    int num = matchmaking->GetNumLobbyMembers(lobby);
+    d["MEMBER_NUM"] = std::to_string(num);
+
+    bool is_ranked = d.find("RANK_HOST_LEVEL") != d.end();
+    d["type"] = is_ranked ? "RANKED" : "PLAYER";
+
+    return d;
+}
+
+bool checkTimer(time_t* timer, int period_in_seconds) {
+    if (*timer + period_in_seconds <= time(NULL)) {
+        *timer = time(NULL);
+        return true;
+    }
+    return false;
+}
+
+void ScrWindow::DrawLobbiesSection() {
+    if (!ImGui::CollapsingHeader("Lobbies"))
+        return;
+
+    bool logged_in = DrawNetworkSection();
+    if (!logged_in) return; // lobby search actually works even without logging in
+
+    auto base = GetBbcfBaseAdress();
+    // ISteamMatchmaking* matchmaking = *g_tempVals.ppSteamMatchmaking;
+    ISteamMatchmaking* matchmaking = *(ISteamMatchmaking**)((char*)base + 0x005d3228); // (ISteamMatchmaking*)base->static_SteamInterfaces.matchmaking;
+
+    static time_t t_last_request = 0;
+    static bool loop_requests = false;
+    if (ImGui::Button("Request Lobbies") || loop_requests && checkTimer(&t_last_request, 10)) {
+        auto state_1 = *(int*)(base + 0x8f7958 + 0x4); // base->static_NetworkStruct.state_1_
+        if (state_1 != 0x26 && state_1 != 0x49) { // should check that a BBCF search isn't already running. otherwise, possibly the BBCF call gets canceled
+            matchmaking->AddRequestLobbyListDistanceFilter(k_ELobbyDistanceFilterWorldwide);
+            SteamAPICall_t r = matchmaking->RequestLobbyList();
+        }
+    }
+    ImGui::SameLine();
+    ImGui::Checkbox("loop", &loop_requests);
+
+
+    /*
+    auto lobby = (GAMESTEAM_SearchResultNode*)base->static_GAMESTEAM_CNetworkServer.lobby_search_results.head;
+    while (lobby != 0 && lobby->valid_) { // TODO: iterate over CNetworkServer.lobby_order instead?
+        DrawLobby(lobby);
+        lobby = (GAMESTEAM_SearchResultNode*)lobby->base.next;
+    }
+    */
+
+    // TODO: call 000a55e0 GAMESTEAM_CNetworkServer::_call_read_lobby_search_results to load the request into BBCF lists, and render from there?
+    // then join might work with push_action(1)
+
+
+    static std::vector<std::map<std::string, std::string>> ranked, player, player_private;
+    static time_t t_last_lobby_check = 0;
+
+    if (checkTimer(&t_last_lobby_check, 2)) {
+
+        ranked.clear();
+        player.clear();
+        player_private.clear();
+
+        for (int l = 0; ; l++) {
+            std::map<std::string, std::string> d = ReadLobbyToDict(matchmaking, l);
+            if (d.size() == 0) break;
+
+            if (d.find("HOST_NETCOLOR") == d.end()) continue; // malformed lobbies exist and cause crash on std::stoi
+
+            if (d["type"] == "RANKED") ranked.push_back(d);
+            else if (d["PLAYER_PRIVATE_MAX"] != "0") player_private.push_back(d);
+            else player.push_back(d);
+        }
+    }
+
+
+    if (ranked.size() + player.size() == 0)
+        ImGui::Text("no lobbies");
+
+    if (ranked.size() > 0) {
+        ImGui::Text("     Ranked");
+
+        for (auto& d : ranked)
+            DrawLobby(d);
+    }
+
+    if (player.size() + player_private.size() > 0) {
+        if (ranked.size() > 0) ImGui::Separator();
+        ImGui::Text("    Player");
+
+        for (auto& d : player)
+            DrawLobby(d);
+
+        for (auto& d : player_private)
+            DrawLobby(d);
+    }
+}

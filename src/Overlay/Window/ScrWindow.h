@@ -32,6 +32,7 @@ private:
 	void DrawSaveStates();
 	void DrawReplayTakeover();
 	void DrawRoomSection();
+	void DrawLobbiesSection();
 	void DrawWakeupDelayControl();
 	void DrawInputBufferButton();
 	void DrawPlaybackEditor();
