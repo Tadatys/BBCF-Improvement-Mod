@@ -1,7 +1,7 @@
 #include "Settings.h"
 #include "logger.h"
 #include "keycodes.h"
-
+#include <regex>
 #include "Core/interfaces.h"
 
 #include <atlstr.h>
@@ -47,8 +47,10 @@ void Settings::applySettingsIni(D3DPRESENT_PARAMETERS* pPresentationParameters)
 	g_modVals.freeze_frame_keycode = Settings::getButtonValue(Settings::settingsIni.freezeFrameKeybind);
 	g_modVals.step_frames_keycode = Settings::getButtonValue(Settings::settingsIni.stepFramesKeybind);
 	g_modVals.uploadReplayData = Settings::settingsIni.uploadReplayData;
+	g_modVals.frame_history_width = Settings::settingsIni.FrameHistoryWidth;
+	g_modVals.frame_history_height = Settings::settingsIni.FrameHistoryHeight;
+	g_modVals.frame_history_spacing = Settings::settingsIni.FrameHistorySpacing;
 
-	
 	//CA2W pszwide (host_c_str);
 	g_modVals.uploadReplayDataHost = Settings::settingsIni.uploadReplayDataHost;;
 	//std::string str2 = Settings::settingsIni.uploadReplayDataEndpoint;
@@ -163,7 +165,6 @@ void Settings::initSavedSettings()
 		//in this case the value is set in Direct3DDevice9ExWrapper::CreateRenderTargetEx!
 		break;
 	}
-
 	savedSettings.origViewportRes.x = 0.0;
 	savedSettings.origViewportRes.y = 0.0;
 
@@ -199,8 +200,10 @@ int Settings::changeSetting(std::string setting_name, std::string new_value) {
 
 		bool found_flag = false;
 		std::string line;
+		std::regex pattern("^\\s*" + setting_name + "\\s*=");
+
 		while (getline(inputFile, line)) {
-			if (line.find(setting_name) == 0) {
+			if (std::regex_search(line,pattern)) {
 				tempFile << setting_name << " = " << new_value << std::endl;
 				found_flag = true;
 			}
