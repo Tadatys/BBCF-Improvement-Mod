@@ -756,6 +756,55 @@ void __declspec(naked)SkipReplayListConfirm()
 	}
 }
 
+int fast_forward_speed = 10;
+DWORD FastForwardJmpBackAddr = 0;
+void __declspec(naked)FastForward()
+{
+	static int i;
+	i = fast_forward_speed - 1;
+
+	__asm {
+START:
+		pushad
+	}
+	
+	static char* base;
+	base = GetBbcfBaseAdress();
+	static const int round = *(int*)(base + 0x00e19664) - 1;
+	static const int* playback_frame = (int*)(base + 0x011c0348);
+	static const int* round_lengths = (int*)(base + 0x0115b900);
+	static const char* run_1_frame = base + 0x0016b1f0;
+
+	i -= 1;
+	if (i <= 0 || *playback_frame > *(round_lengths + round * 0xa0 / 4) - 10) {
+	//if (i <= 0) {
+		i = 0;
+		__asm jmp EXIT
+	}
+	
+
+	/*for (i = 0; i < fast_forward_speed && ...; i++) {
+		_asm {
+		
+		}
+	}*/
+
+	__asm {
+		popad
+
+		push 0
+		mov ecx, edi
+		call[run_1_frame]
+
+		jmp START
+
+EXIT:
+		popad
+		jmp[FastForwardJmpBackAddr]
+	}
+}
+
+
 bool placeHooks_bbcf()
 {
 	LOG(2, "placeHooks_bbcf\n");
@@ -858,6 +907,8 @@ bool placeHooks_bbcf()
 	BeforeWriteReplayListDatJmpBackAddr = HookManager::SetHook("BeforeWriteReplayListDat", (DWORD)(GetBbcfBaseAdress() + 0x2C2AF8), 5, BeforeWriteReplayListDat);
 
 	HookManager::SetHook("SkipReplayListConfirm", (DWORD)(GetBbcfBaseAdress() + 0x002c3038), 5, SkipReplayListConfirm);
+
+	FastForwardJmpBackAddr = HookManager::SetHook("FastForward", (DWORD)(GetBbcfBaseAdress() + 0x0016b0f4), 9, FastForward);
 
 	return true;
 }
