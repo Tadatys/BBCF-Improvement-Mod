@@ -20,19 +20,12 @@ void TimelineWindow::Draw()
 	ImGui::SameLine();
 	bool copyPressed = ImGui::Button("Copy to clipboard");
 
-	ImGui::SameLine();
-	if (ImGui::Button("Open theater file")) {
-		FILE* f = fopen("theaterfile", "w");
-		fputs("{\"entity_columns\":[\"id\",\"pos_x\",\"pos_y\",\"facing_left\",\"sprite\"],\n\"frames\":[\n", f); // \"off_x\",\"off_y\",
-		fclose(f);
-	}
+
+	//ImGui::SameLine();
+	//ImGui::Checkbox("Enable", &g_timeline.enabled);
 
 	ImGui::SameLine();
-	if (ImGui::Button("Close theater file")) {
-		FILE* f = fopen("theaterfile", "a");
-		fputs("]}", f);
-		fclose(f);
-	}
+	ImGui::Checkbox("Write theaterfile", &g_timeline.write_theaterfile);
 
 
 	//if (ImGui::Button("Update"))

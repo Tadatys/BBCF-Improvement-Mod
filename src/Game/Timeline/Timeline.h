@@ -13,7 +13,7 @@ struct TimelineTick {
 class Timeline {
 
 public:
-	int tick_count;
+	int tick_count, last_frame = -1;
 	TimelineTick ticks[MAX_TICKS];
 
 	Timeline();
@@ -26,6 +26,7 @@ public:
 	std::string print_char_data(CharData* p);
 
 	bool enabled = false;
+	bool write_theaterfile = false;
 };
 
 extern Timeline g_timeline;

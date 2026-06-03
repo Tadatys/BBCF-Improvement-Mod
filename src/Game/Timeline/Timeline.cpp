@@ -5,6 +5,14 @@
 #include "Game/gamestates.h"
 #include "Game/ReplayFiles/ReplayFile.h"
 #include <ctime>
+#include <Game/ReplayFiles/ReplayFileManager.h>
+
+
+void tlog(std::string msg) {
+	// log to timeline
+	TimelineTick tt = { 0, msg };
+	g_timeline.write_tick(tt);
+}
 
 
 Timeline::Timeline() {
@@ -14,6 +22,13 @@ Timeline::Timeline() {
 void Timeline::write_tick(TimelineTick& t) {
 	this->ticks[this->tick_count % MAX_TICKS] = t;
 	this->tick_count += 1;
+
+	/*if (this->write_to_file) {
+		FILE* f = fopen(this->filename.c_str(), "a");
+		fwrite(t.log.c_str(), t.log.size(), 1, f);
+		fwrite("\n", 1, 1, f);
+		fclose(f);
+	}*/
 }
 
 std::string Timeline::print_char_data(CharData* p) {
@@ -44,6 +59,10 @@ std::string Timeline::print_char_data(CharData* p) {
 	for (int i = 0; i < 6; i++)
 		if (buffer->button[i].down > 0) s += buttons[i];
 		else s += " ";
+
+	//if (buffer->button[4].hit > 0 && buffer->button[0].down == 0 && buffer->button[1].down == 0 && buffer->button[2].down == 0 &&
+	//		buffer->button[3].down == 0 && buffer->button[5].down == 0) // use taunt button to mark weird/interesting moments
+	//	wtf = true;
 
 
 	s += " ";
@@ -196,10 +215,15 @@ void Timeline::update() {
 		return;
 
 	TimelineTick t;
-	t.frame = *g_gameVals.pFrameCount;
+	t.frame = *g_gameVals.pFrameCount; // shoud use base->static_CBattleReplayDataManager.playback_frame instead?
 
 	int i_prev = max(0, tick_count - 1) % MAX_TICKS;
-	if (t.frame == ticks[i_prev].frame) return; // do nothing if game is paused
+	if (t.frame == last_frame) return; // do nothing if game is paused, or update() is called multiple times per frame
+	last_frame = t.frame;
+	// XXX: update() runs multiple times during round start/end, but not during gameplay?
+
+	CharData* p1 = g_interfaces.player1.GetData();
+	CharData* p2 = g_interfaces.player2.GetData();
 
 
 	// print info about new round
@@ -252,38 +276,94 @@ void Timeline::update() {
 
 	
 	// output sprites in json
-	if (true) {
+	if (write_theaterfile) {
+		
 		std::string r = "[";
 
 		char* base = GetBbcfBaseAdress();
 
-		//r += "[\"G\"," // TODO: round metadata, current frame/clock. also character names?
+		// save view/proj matrices
+		/* r += "[\"V\"";
+		for (int j = 0; j < 16; j++) r += "," + std::to_string(((float*)g_gameVals.viewMatrix)[j]);
+		r += "],[\"P\"";
+		for (int j = 0; j < 16; j++) r += "," + std::to_string(((float*)g_gameVals.projMatrix)[j]);
+		r += "]";*/
 
 		for (int i = 0; i < g_gameVals.entityCount; i++)
 		{
 			CharData* ent = (CharData*)g_gameVals.pEntityList[i];
-			const bool isEntityActive = ent->unknownStatus1 == 1 && ent->pJonbEntryBegin;
-			if (!isEntityActive) continue;
+
+			const bool isEntityActive = ent->unknownStatus1 == 1; // && ent->pJonbEntryBegin;
+			if (!isEntityActive) continue; // only check if i > 1 ? 
 
 			// logic starting around BBCF.exe+1A00A1:
-			char* ent_hip_info = (char*)ent + 0x09e0 + *(int*)((char*)ent + 0x1250) * 108; // p+0x1250 is an index into an array starting from p+0x09e0
-			char* ptr = *(char**)(*(char**)(base + 0x623674) + *(int*)(ent_hip_info + 0 * 4 + 0x2C) * 4);
-			char* hip_info = *(char**)(*(char**)(ptr + 4) + *(int*)(ent_hip_info + 0 * 4 + 0x4C) * 4);
+			//char* ent_hip_info = (char*)ent + 0x09e0 + *(int*)((char*)ent + 0x1250) * 108; // p+0x1250 is an index into an array starting from p+0x09e0
+			//char* ptr = *(char**)(*(char**)(base + 0x623674) + *(int*)(ent_hip_info + 0 * 4 + 0x2C) * 4);
+			//char* hip_info = *(char**)(*(char**)(ptr + 4) + *(int*)(ent_hip_info + 0 * 4 + 0x4C) * 4);
 			//int off_x = *(int*)(hip_info + 0x44), off_y = *(int*)(hip_info + 0x48); // sometimes causes pointer errors, I suspect that 0 * 4 should be 1 * 4 in those cases
-			// TODO: transform position_x/y with view/proj matrices, as in HitboxOverlay
+
+			int palette_index = *(int*)((char*)ent + 0x354); // as set by paletteIndex command (4061)
 
 			if (r.size() > 1) r += ",";
-			r = r + "[\"" + std::to_string((int)ent) + "\"," +
-				std::to_string(ent->position_x) + "," + std::to_string(ent->position_y) + "," +
-				//std::to_string(off_x) + "," + std::to_string(off_y) + "," +
-				std::to_string(ent->facingLeft) + ",\"" + (char*)&ent->currentSprite + "\"]";
+			r += "[\"" + std::to_string((int)ent) + "\",\"" + std::to_string((int)ent->ownerEntity) + "\"," +
+				std::to_string(ent->position_x_dupe) + "," + std::to_string(ent->position_y_dupe) + "," +
+				"\"" + ent->currentAction + "\"" + "," + "\"" + (char*)&ent->currentSprite + "\"" + "," +
+				std::to_string(ent->facingLeft) + "," + std::to_string(ent->rotationDegrees) + "," + std::to_string(palette_index) + "," +
+				std::to_string(ent->currentHP);
+			
+			if (i < 2) {
+				// record inputs
+				const char* arrows = "123456789";
+
+				InputBuffer* buffer = (InputBuffer*)ent->pad_1E79D;
+				int flip = ent->facingLeft;
+				int dir = 4; // neutral default
+				for (int i = 0; i < 9; i++)
+					if (buffer->dir[i].down > 0) dir = (flip ? i + 2 - (i % 3) * 2 : i); // flips 1<->3 and so on
+				r = r + "," + arrows[dir] + ",\"";
+
+				const char buttons[7] = "ABCDEF";
+				for (int i = 0; i < 6; i++)
+					if (buffer->button[i].down > 0) r += buttons[i];
+				r += "\"";
+			}
+
+			r += "]";
+
 		}
 
-		r += "],\n";
+		r += "]";
 
-		FILE* f = fopen("theaterfile", "a");
-		fputs(r.c_str(), f);
-		fclose(f);
+		TimelineTick t1;
+		t1.frame = *g_gameVals.pFrameCount;
+		t1.log = r;
+		//write_tick(t1);
+
+
+		MatchInfo* info = (MatchInfo*)g_gameVals.pMatchRounds;
+
+		ReplayFile* rp = (ReplayFile*)(base + 0x115B470 + 8); // &base->static_CBattleReplayDataManager.replay
+		std::string filename = ReplayFileManager::build_file_name(rp) + ".json";
+		static FILE* f = NULL;
+		static std::string f_filename = "";
+
+		//FILE* f = fopen(filename.c_str(), "r+");
+		if (t.frame <= 2 && info->round == 0 || f == NULL || f_filename != filename) { // is frame really never 0?
+			if (f) fclose(f);
+			f = fopen(filename.c_str(), "w+");
+			f_filename = filename;
+			fputs("{\"columns\":[\"id\",\"owner\",\"x\",\"y\",\"action\",\"sprite\",\"facing_left\",\"rotation\",\"palette_index\",\"hp\",\"input_dir\",\"input_buttons\"],\n", f);
+			fputs((std::string() + "\"info\":[" + std::to_string(info->round) + "," + std::to_string(t.frame) + ",\"" + p1->char_abbr + "\",\"" + p2->char_abbr + "\"],\n").c_str(), f);
+			fputs("\"frames\":[\n", f);
+			fputs((r + "]}").c_str(), f);
+			fflush(f);
+		}
+		else {
+			int err = fseek(f, -2, 2); // go to before "]}"
+			fputs((",\n" + r + "]}").c_str(), f);
+			fflush(f);
+		}
+		//fclose(f); // TODO: close after leaving battle
 	}
 
 
@@ -292,11 +372,7 @@ void Timeline::update() {
 	if (s.size() > 6) s = s.substr(s.size() - 6, 6);
 	else s.insert(0, 6 - s.size(), ' ');
 
-
-	CharData* p1 = g_interfaces.player1.GetData();
 	s += " " + print_char_data(p1);
-
-	CharData* p2 = g_interfaces.player2.GetData();
 	s += " " + print_char_data(p2);
 
 	t.log = s;
@@ -330,6 +406,10 @@ void Timeline::update() {
 	}*/
 
 	write_tick(t);
+
+	//if (wtf) {
+	//	write_tick(TimelineTick{ t.frame, "    ---- WTF ----" });
+	//}
 }
 
 
